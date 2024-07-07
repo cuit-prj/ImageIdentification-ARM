@@ -12,9 +12,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
-
-
-
 int fd_lcd;
 int *p;
 void Init_LCD();
