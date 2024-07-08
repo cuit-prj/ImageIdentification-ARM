@@ -161,6 +161,8 @@ void refresh(int sig)
 	flag = true;
 }
 
+
+//调用方法：RFID_TEST(argc, (char **)argv);
 int RFID_TEST(int argc, char **argv)
 {
 	usage(argc, argv);
