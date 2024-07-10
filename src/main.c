@@ -17,6 +17,11 @@
 #include "jpeg.h"
 #include "ISO14443A.h"
 #include <errno.h>
+#include <sys/stat.h>
+
+
+
+#define PIPE_PATH "/tmp/photoname_pipe"
 
 unsigned int *fb_mem;
 struct {
@@ -116,12 +121,39 @@ int get_id(int fd) {
 void refresh(int sig) {
     flag = true;
 }
+
+
+void clear_pipe(const char *pipe_path) {
+    int fd = open(pipe_path, O_RDONLY | O_NONBLOCK);
+    if (fd == -1) {
+        perror("open");
+        return;
+    }
+
+    char buffer[1024];
+    while (read(fd, buffer, sizeof(buffer)) > 0) {
+        // 读取并丢弃数据
+    }
+
+    close(fd);
+}
+
 int captureV(void) {
     int fd, jpg_fd;
     int ret, jpg_size;
     int x, y, i = 0;
     char pic_name[20];
     char *jpg_mem;
+    int fdphoto;
+    char filename[256];
+
+    // 创建有名管道
+    if (mkfifo(PIPE_PATH, 0666) == -1) {
+        perror("mkfifo");
+        exit(EXIT_FAILURE);
+    }
+
+   
 
     fd = open("/dev/fb0", O_RDWR);
     if(fd < 0) {
@@ -236,6 +268,7 @@ int captureV(void) {
     }
 
     while(1) {
+
         for(i = 0; i < 4; i++) {
             v4lbuf.index = i;
             ret = ioctl(cam_fd, VIDIOC_DQBUF, &v4lbuf);
@@ -246,8 +279,17 @@ int captureV(void) {
 
             Showjpeg(buffers[v4lbuf.index].start, buffers[v4lbuf.index].length, fb_mem);
             if (flag) {
+
+                 fdphoto = open(PIPE_PATH, O_WRONLY);
+                if (fdphoto == -1) {
+                perror("open");
+                exit(EXIT_FAILURE);
+                }
                 pthread_mutex_lock(&lock);
-                sprintf(pic_name, "pic.jpg");
+                sprintf(pic_name, "photois%d.jpg", (int)time(NULL));
+                clear_pipe(PIPE_PATH);
+                write(fdphoto, pic_name, strlen(pic_name) + 1);
+                
                 jpg_fd = open(pic_name, O_WRONLY | O_CREAT, 0666);
                 if (jpg_fd >= 0) {
                     write(jpg_fd, buffers[v4lbuf.index].start, buffers[v4lbuf.index].length);
@@ -306,10 +348,11 @@ void *read_rfid(void *arg) {
             pthread_mutex_lock(&lock);
             flag = true;
             pthread_mutex_unlock(&lock);
-            sleep(1); // 设置为1秒防止连续触发
+            sleep(1); 
         }
     }
 }
+
 int main(int argc, char **argv) {
     if(argc < 2) {
         printf("Usage: %s /dev/ttyUSB0\n", argv[0]);
@@ -350,4 +393,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
